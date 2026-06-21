@@ -3,7 +3,7 @@ import type { ValidationFields } from '../types'
 // Empty base in dev so relative URLs go through the Vite proxy.
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
-export const GRAPHQL_URL = `${API_BASE}/graphql`
+export const GRAPHQL_URL = `${API_BASE}/api/graphql`
 export const EXPORT_URL = `${API_BASE}/api/employees/export`
 
 // Module-level so the client can read the token outside React. AuthContext

@@ -37,20 +37,20 @@ Open http://localhost:5173 and sign in with `admin` / `password`.
 
 | Variable | Purpose | Dev default |
 |---|---|---|
-| `VITE_API_URL` | Base URL of the API. **Leave empty in dev** so requests are relative (`/graphql`, `/api/...`) and go through the Vite proxy (no CORS). Set to the backend's absolute origin in production. | _(empty)_ |
-| `VITE_PROXY_TARGET` | Backend origin the Vite dev server proxies `/graphql` and `/api` to. | `http://localhost:8000` |
+| `VITE_API_URL` | Base URL of the API. **Leave empty in dev** so requests are relative (`/api/...`) and go through the Vite proxy (no CORS). Set to the backend's absolute origin in production. | _(empty)_ |
+| `VITE_PROXY_TARGET` | Backend origin the Vite dev server proxies `/api` to. | `http://localhost:8000` |
 
 ### Networking: dev proxy vs production CORS
 
-In development, [vite.config.ts](vite.config.ts) proxies `/graphql` and `/api`
-to the backend, so the browser only ever makes same-origin requests — **no CORS
-needed**.
+In development, [vite.config.ts](vite.config.ts) proxies `/api` to the backend
+(both `/api/graphql` and `/api/employees/export`), so the browser only ever
+makes same-origin requests — **no CORS needed**.
 
 In production you'd typically:
 1. Set `VITE_API_URL` to the backend origin (e.g. `https://api.example.com`), and
-2. Enable CORS on the backend. Note Laravel's default CORS config covers only
-   `api/*` — **not** `/graphql` — so publish `config/cors.php` and set
-   `'paths' => ['api/*', 'graphql']`.
+2. Enable CORS on the backend. Since everything lives under `/api`, Laravel's
+   default CORS config (`'paths' => ['api/*']`) already covers it — no extra
+   config needed.
 
 ## Features
 
@@ -65,7 +65,7 @@ In production you'd typically:
 
 ## How it talks to the backend
 
-- **GraphQL** (`POST /graphql`) for everything except export, via
+- **GraphQL** (`POST /api/graphql`) for everything except export, via
   [`gqlRequest` / `gqlUpload`](src/lib/graphql.ts). The Bearer token is attached
   automatically.
 - **Validation errors**: the backend returns

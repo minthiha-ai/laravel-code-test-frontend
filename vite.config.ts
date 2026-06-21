@@ -11,8 +11,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     server: {
+      // /api covers both /api/graphql and /api/employees/export.
       proxy: {
-        '/graphql': { target, changeOrigin: true },
         '/api': { target, changeOrigin: true },
       },
     },
