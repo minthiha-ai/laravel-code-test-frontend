@@ -98,6 +98,13 @@ function throwForErrors(errors: GraphQLErrorShape[]): never {
   throw new GraphQLRequestError(errors[0]?.message ?? 'GraphQL request failed.')
 }
 
+/** Apply GraphQL error/validation/null-data handling to a parsed body. */
+function handleGraphQLBody<T>(body: GraphQLResponse<T>): T {
+  if (body.errors && body.errors.length > 0) throwForErrors(body.errors)
+  if (body.data == null) throw new GraphQLRequestError('Empty response from server.')
+  return body.data
+}
+
 async function parse<T>(res: Response): Promise<T> {
   // A genuine HTTP 401 can also occur (e.g. before GraphQL even runs).
   if (res.status === 401) {
@@ -106,10 +113,11 @@ async function parse<T>(res: Response): Promise<T> {
   }
 
   const body = (await res.json()) as GraphQLResponse<T>
-  if (body.errors && body.errors.length > 0) throwForErrors(body.errors)
-  if (body.data == null) throw new GraphQLRequestError('Empty response from server.')
-  return body.data
+  return handleGraphQLBody(body)
 }
+
+/** Progress callback: bytes transferred so far, and total (null if unknown). */
+export type ProgressCallback = (loaded: number, total: number | null) => void
 
 /** Execute a GraphQL query/mutation with JSON variables. */
 export async function gqlRequest<T>(
@@ -130,7 +138,7 @@ export async function gqlRequest<T>(
  * it can't be a plain <a href> — we fetch with the auth header, then the caller
  * turns the Blob into a download.
  */
-export async function downloadExport(): Promise<Blob> {
+export async function downloadExport(onProgress?: ProgressCallback): Promise<Blob> {
   const res = await fetch(EXPORT_URL, { headers: authHeaders() })
   if (res.status === 401) {
     onUnauthorized?.()
@@ -139,7 +147,32 @@ export async function downloadExport(): Promise<Blob> {
   if (!res.ok) {
     throw new GraphQLRequestError(`Export failed (HTTP ${res.status}).`)
   }
-  return res.blob()
+
+  const lenHeader = res.headers.get('Content-Length')
+  const total = lenHeader ? Number.parseInt(lenHeader, 10) : null
+
+  // Without a readable stream (or a progress consumer) just take the blob.
+  if (!res.body || !onProgress) {
+    const blob = await res.blob()
+    onProgress?.(blob.size, total ?? blob.size)
+    return blob
+  }
+
+  // Stream the body so we can report bytes-received as they arrive.
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let loaded = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    loaded += value.length
+    onProgress(loaded, total)
+  }
+
+  return new Blob(chunks as BlobPart[], {
+    type: res.headers.get('Content-Type') ?? 'application/octet-stream',
+  })
 }
 
 /**
@@ -147,20 +180,52 @@ export async function downloadExport(): Promise<Blob> {
  * graphql-multipart-request-spec. Content-Type is intentionally left unset so
  * the browser adds the multipart boundary; the Authorization header is sent.
  */
-export async function gqlUpload<T>(
+export function gqlUpload<T>(
   query: string,
   file: File,
   variables: Record<string, unknown> = {},
+  onUploadProgress?: ProgressCallback,
 ): Promise<T> {
   const form = new FormData()
   form.append('operations', JSON.stringify({ query, variables: { ...variables, file: null } }))
   form.append('map', JSON.stringify({ '0': ['variables.file'] }))
   form.append('0', file)
 
-  const res = await fetch(GRAPHQL_URL, {
-    method: 'POST',
-    headers: authHeaders({ Accept: 'application/json' }),
-    body: form,
+  // XMLHttpRequest (not fetch) because it exposes real upload progress events.
+  // Content-Type is intentionally left unset so the browser adds the multipart
+  // boundary; the Authorization header is sent.
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', GRAPHQL_URL)
+    xhr.setRequestHeader('Accept', 'application/json')
+    if (authToken) xhr.setRequestHeader('Authorization', `Bearer ${authToken}`)
+
+    if (onUploadProgress) {
+      xhr.upload.onprogress = (e) =>
+        onUploadProgress(e.loaded, e.lengthComputable ? e.total : null)
+    }
+
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        onUnauthorized?.()
+        reject(new UnauthorizedError())
+        return
+      }
+      let body: GraphQLResponse<T>
+      try {
+        body = JSON.parse(xhr.responseText) as GraphQLResponse<T>
+      } catch {
+        reject(new GraphQLRequestError('Invalid response from server.'))
+        return
+      }
+      try {
+        resolve(handleGraphQLBody(body))
+      } catch (err) {
+        reject(err)
+      }
+    }
+
+    xhr.onerror = () => reject(new GraphQLRequestError('Network error during upload.'))
+    xhr.send(form)
   })
-  return parse<T>(res)
 }

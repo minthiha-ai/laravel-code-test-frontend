@@ -43,6 +43,20 @@ export interface Paginated<T> {
 export interface ImportResult {
   message: string
   queued: boolean
+  import_id: string
+}
+
+export type ImportStatusValue =
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'unknown'
+
+export interface ImportStatus {
+  status: ImportStatusValue
+  processed: number
+  total: number
 }
 
 /** Validation errors keyed by field name (e.g. { email: ["..."] }). */

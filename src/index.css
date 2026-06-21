@@ -21,3 +21,13 @@ body {
 :where(button, a, input, select, textarea):focus-visible {
   @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-white;
 }
+
+/* Indeterminate progress bar: a segment sliding left-to-right. */
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}

@@ -60,8 +60,8 @@ In production you'd typically:
 | **Route protection** | Unauthenticated users are redirected to `/login`. An `Unauthenticated` response from any request clears the token and redirects (global handler). |
 | **Employees table** | Paginated (`first`/`page`), page-size selector (10/25/50/100), shows `paginatorInfo.total`, with loading / empty / error states. |
 | **View / Edit / Delete** | Row actions. Edit is a partial `updateEmployee` with **inline field validation** (including duplicate-email). Delete is confirm-guarded. |
-| **Import** | `.xlsx/.xls/.csv` upload via the GraphQL multipart spec. **Async** — the backend queue worker applies it (matched by email, never creates); the dialog explains this and offers a manual refresh. |
-| **Export** | Authenticated blob download of `employees.xlsx` (fetched with the Bearer header, not a plain link). |
+| **Import** | `.xlsx/.xls/.csv` upload via the GraphQL multipart spec. **Async** — processed on the backend queue worker (existing emails are updated, new emails created). Shows a real **upload progress bar**, then polls `importStatus` for a live **processing progress bar** (rows done / total), and auto-refreshes the list on completion. |
+| **Export** | Authenticated blob download of `employees.xlsx` (fetched with the Bearer header, not a plain link). Streams the response so it can show a **download progress bar** (indeterminate while the backend generates the sheet, then a real %). |
 
 ## How it talks to the backend
 

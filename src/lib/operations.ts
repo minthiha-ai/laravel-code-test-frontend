@@ -78,6 +78,17 @@ export const IMPORT_EMPLOYEES = /* GraphQL */ `
     importEmployees(file: $file) {
       message
       queued
+      import_id
+    }
+  }
+`
+
+export const IMPORT_STATUS = /* GraphQL */ `
+  query ImportStatus($id: String!) {
+    importStatus(id: $id) {
+      status
+      processed
+      total
     }
   }
 `

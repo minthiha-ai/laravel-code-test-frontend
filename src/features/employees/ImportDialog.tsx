@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
+import { ProgressBar } from '../../components/ui/ProgressBar'
 import { GraphQLRequestError } from '../../lib/graphql'
-import { useImportEmployees } from '../../hooks/useImportEmployees'
-import type { ImportResult } from '../../types'
+import { useImportEmployees, useImportStatus } from '../../hooks/useImportEmployees'
 
 interface ImportDialogProps {
   open: boolean
@@ -21,25 +21,48 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
 
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<ImportResult | null>(null)
+  const [uploadPct, setUploadPct] = useState(0)
+  const [importId, setImportId] = useState<string | null>(null)
+
+  const statusQuery = useImportStatus(importId)
+  const status = statusQuery.data
+
+  // Phase is derived (no phase state) to keep effects free of setState.
+  const phase: 'idle' | 'uploading' | 'processing' | 'done' | 'failed' =
+    importMut.isPending
+      ? 'uploading'
+      : importId == null
+        ? 'idle'
+        : status?.status === 'completed'
+          ? 'done'
+          : status?.status === 'failed'
+            ? 'failed'
+            : 'processing'
+
+  // Once processing completes, refresh the list so it's current on close.
+  useEffect(() => {
+    if (status?.status === 'completed') {
+      qc.invalidateQueries({ queryKey: ['employees'] })
+    }
+  }, [status?.status, qc])
 
   function reset() {
     setFile(null)
     setError(null)
-    setResult(null)
+    setUploadPct(0)
+    setImportId(null)
     importMut.reset()
     if (inputRef.current) inputRef.current.value = ''
   }
 
   function close() {
-    if (importMut.isPending) return
+    if (phase === 'uploading') return // don't interrupt an in-flight upload
     reset()
     onClose()
   }
 
   function pick(selected: File | null) {
     setError(null)
-    setResult(null)
     if (selected && selected.size > MAX_BYTES) {
       setFile(null)
       setError('File is too large (max 50 MB).')
@@ -51,18 +74,27 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
   async function handleUpload() {
     if (!file) return
     setError(null)
+    setUploadPct(0)
     try {
-      const res = await importMut.mutateAsync(file)
-      setResult(res)
+      const res = await importMut.mutateAsync({
+        file,
+        onProgress: (loaded, total) => {
+          if (total) setUploadPct(Math.round((loaded / total) * 100))
+        },
+      })
+      setImportId(res.import_id)
     } catch (err) {
-      setError(err instanceof GraphQLRequestError ? err.message : 'Upload failed. Please try again.')
+      setError(
+        err instanceof GraphQLRequestError ? err.message : 'Upload failed. Please try again.',
+      )
     }
   }
 
-  function refreshAndClose() {
-    qc.invalidateQueries({ queryKey: ['employees'] })
-    close()
-  }
+  const total = status?.total ?? 0
+  const processed = status?.processed ?? 0
+  const procPct = total > 0 ? Math.round((processed / total) * 100) : null
+
+  const showResult = phase === 'processing' || phase === 'done'
 
   return (
     <Modal
@@ -70,48 +102,73 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
       onClose={close}
       title="Import employees"
       footer={
-        result ? (
-          <>
-            <Button variant="secondary" onClick={close}>
-              Close
-            </Button>
-            <Button onClick={refreshAndClose}>Refresh list</Button>
-          </>
+        phase === 'done' ? (
+          <Button onClick={close}>View list</Button>
+        ) : phase === 'processing' ? (
+          <Button variant="secondary" onClick={close}>
+            Close (keeps running)
+          </Button>
         ) : (
           <>
-            <Button variant="secondary" onClick={close} disabled={importMut.isPending}>
+            <Button variant="secondary" onClick={close} disabled={phase === 'uploading'}>
               Cancel
             </Button>
-            <Button onClick={handleUpload} loading={importMut.isPending} disabled={!file}>
+            <Button
+              onClick={handleUpload}
+              loading={phase === 'uploading'}
+              disabled={!file || phase === 'uploading'}
+            >
               Upload
             </Button>
           </>
         )
       }
     >
-      {result ? (
-        <div className="space-y-3">
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            {result.message}
+      {showResult ? (
+        <div className="space-y-4">
+          {phase === 'done' ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              Import complete — {processed.toLocaleString()}
+              {total > 0 ? ` of ${total.toLocaleString()}` : ''} rows processed.
+            </div>
+          ) : (
+            <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+              Processing in the background…
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>{phase === 'done' ? 'Completed' : 'Importing rows'}</span>
+              <span className="font-medium text-slate-700">
+                {procPct != null
+                  ? `${procPct}%`
+                  : `${processed.toLocaleString()} rows`}
+              </span>
+            </div>
+            <ProgressBar value={phase === 'done' ? 100 : procPct} />
+            {total > 0 && (
+              <p className="text-xs text-slate-400">
+                {processed.toLocaleString()} / {total.toLocaleString()} rows
+              </p>
+            )}
           </div>
-          <p className="text-sm text-slate-600">
-            The import runs in the background. It updates existing employees matched by{' '}
-            <span className="font-medium">email</span> and never creates new ones. Once the
-            backend queue worker has processed it, use <span className="font-medium">Refresh
-            list</span> to see the changes.
-          </p>
-          <p className="text-xs text-slate-400">
-            Backend requirement: <code>php artisan queue:work</code> must be running for the
-            import to be applied.
-          </p>
+
+          {phase === 'processing' && (
+            <p className="text-xs text-slate-400">
+              The import runs on the backend queue worker. You can close this dialog — it
+              will keep running.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
-            Upload an <span className="font-medium">.xlsx</span>, <span className="font-medium">.xls</span>,
-            or <span className="font-medium">.csv</span> file with columns:{' '}
+            Upload an <span className="font-medium">.xlsx</span>,{' '}
+            <span className="font-medium">.xls</span>, or{' '}
+            <span className="font-medium">.csv</span> file with columns:{' '}
             <code className="text-xs">first_name, last_name, email, phone, address, salary</code>.
-            Rows are matched to existing employees by email.
+            Existing employees are matched by email and updated; new emails are created.
           </p>
 
           <input
@@ -133,6 +190,16 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
               {file ? `${(file.size / 1024).toFixed(0)} KB` : 'or click to browse (max 50 MB)'}
             </span>
           </button>
+
+          {phase === 'uploading' && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>Uploading…</span>
+                <span className="font-medium text-slate-700">{uploadPct}%</span>
+              </div>
+              <ProgressBar value={uploadPct} />
+            </div>
+          )}
 
           {error && (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
