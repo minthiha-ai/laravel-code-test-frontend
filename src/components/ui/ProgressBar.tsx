@@ -1,14 +1,9 @@
 interface ProgressBarProps {
-  /** 0–100. Omit (or pass null) for an indeterminate animated bar. */
+  // 0–100, or null/undefined for an indeterminate animated bar.
   value?: number | null
   className?: string
 }
 
-/**
- * A thin progress bar. With a numeric `value` it fills determinately; without
- * one it shows an indeterminate sliding animation (for work whose size is
- * unknown, e.g. background processing we can't size up front).
- */
 export function ProgressBar({ value, className }: ProgressBarProps) {
   const indeterminate = value == null
   const pct = indeterminate ? 100 : Math.max(0, Math.min(100, value))

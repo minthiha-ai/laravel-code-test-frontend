@@ -4,7 +4,6 @@ import { formatSalary } from '../../lib/format'
 
 interface EmployeesTableProps {
   employees: Employee[]
-  /** Optional per-row actions cell (wired up in Phase F4). */
   renderActions?: (employee: Employee) => ReactNode
 }
 
@@ -54,7 +53,6 @@ export function EmployeesTable({ employees, renderActions }: EmployeesTableProps
   )
 }
 
-/** Skeleton placeholder rows shown during the initial load. */
 export function EmployeesTableSkeleton({ rows = 10 }: { rows?: number }) {
   return (
     <div className="divide-y divide-slate-100">

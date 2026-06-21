@@ -7,7 +7,6 @@ export function employeesKey(page: number, perPage: number) {
   return ['employees', { page, perPage }] as const
 }
 
-/** Paginated employees list. Keeps previous page visible while fetching next. */
 export function useEmployees(page: number, perPage: number) {
   return useQuery({
     queryKey: employeesKey(page, perPage),

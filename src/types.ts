@@ -59,5 +59,5 @@ export interface ImportStatus {
   total: number
 }
 
-/** Validation errors keyed by field name (e.g. { email: ["..."] }). */
+// Validation errors keyed by field name.
 export type ValidationFields = Record<string, string[]>

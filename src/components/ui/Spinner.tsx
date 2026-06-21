@@ -3,7 +3,6 @@ interface SpinnerProps {
   className?: string
 }
 
-/** Spinner that inherits the current text color (works on any background). */
 export function Spinner({ label, className }: SpinnerProps) {
   return (
     <span className={`inline-flex items-center gap-2 text-sm ${className ?? ''}`}>

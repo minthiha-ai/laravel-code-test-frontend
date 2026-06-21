@@ -2,7 +2,6 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { Spinner } from '../components/ui/Spinner'
 
-/** Gate for authenticated routes. Redirects to /login when not signed in. */
 export function ProtectedRoute() {
   const { status } = useAuth()
   const location = useLocation()

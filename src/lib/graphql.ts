@@ -1,19 +1,13 @@
 import type { ValidationFields } from '../types'
 
-/** Base URL of the API. Empty in dev => relative URLs hit the Vite proxy. */
+// Empty base in dev so relative URLs go through the Vite proxy.
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 export const GRAPHQL_URL = `${API_BASE}/graphql`
 export const EXPORT_URL = `${API_BASE}/api/employees/export`
 
-// ---------------------------------------------------------------------------
-// Auth token holder + unauthorized hook
-//
-// The token lives in a module-level variable so non-React code (this client)
-// can read it on every request. AuthContext keeps it in sync and registers the
-// onUnauthorized callback, which fires whenever the API rejects our token.
-// ---------------------------------------------------------------------------
-
+// Module-level so the client can read the token outside React. AuthContext
+// keeps these in sync.
 let authToken: string | null = null
 let onUnauthorized: (() => void) | null = null
 
@@ -30,10 +24,6 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
   if (authToken) headers.Authorization = `Bearer ${authToken}`
   return headers
 }
-
-// ---------------------------------------------------------------------------
-// Error types
-// ---------------------------------------------------------------------------
 
 export class GraphQLRequestError extends Error {}
 
@@ -66,11 +56,8 @@ interface GraphQLResponse<T> {
   errors?: GraphQLErrorShape[]
 }
 
-/**
- * Strip the `input.` prefix that Lighthouse adds to validation keys for
- * `@spread` inputs (e.g. `input.email` -> `email`), so the edit form can map
- * errors to its fields. Also tidies the prefix out of the message text.
- */
+// Lighthouse prefixes @spread input keys with `input.` — strip it so errors
+// map to form fields.
 function normalizeValidation(raw: Record<string, string[]>): ValidationFields {
   const out: ValidationFields = {}
   for (const [key, messages] of Object.entries(raw)) {
@@ -98,7 +85,6 @@ function throwForErrors(errors: GraphQLErrorShape[]): never {
   throw new GraphQLRequestError(errors[0]?.message ?? 'GraphQL request failed.')
 }
 
-/** Apply GraphQL error/validation/null-data handling to a parsed body. */
 function handleGraphQLBody<T>(body: GraphQLResponse<T>): T {
   if (body.errors && body.errors.length > 0) throwForErrors(body.errors)
   if (body.data == null) throw new GraphQLRequestError('Empty response from server.')
@@ -106,7 +92,6 @@ function handleGraphQLBody<T>(body: GraphQLResponse<T>): T {
 }
 
 async function parse<T>(res: Response): Promise<T> {
-  // A genuine HTTP 401 can also occur (e.g. before GraphQL even runs).
   if (res.status === 401) {
     onUnauthorized?.()
     throw new UnauthorizedError()
@@ -116,10 +101,8 @@ async function parse<T>(res: Response): Promise<T> {
   return handleGraphQLBody(body)
 }
 
-/** Progress callback: bytes transferred so far, and total (null if unknown). */
 export type ProgressCallback = (loaded: number, total: number | null) => void
 
-/** Execute a GraphQL query/mutation with JSON variables. */
 export async function gqlRequest<T>(
   query: string,
   variables?: Record<string, unknown>,
@@ -132,12 +115,8 @@ export async function gqlRequest<T>(
   return parse<T>(res)
 }
 
-/**
- * Download the employees export as a binary Blob. This is a REST endpoint
- * (GraphQL can't return a file body) that still requires the Bearer token, so
- * it can't be a plain <a href> — we fetch with the auth header, then the caller
- * turns the Blob into a download.
- */
+// Fetch the export with the auth header (so it can't be a plain <a href>) and
+// hand back a Blob for the caller to download.
 export async function downloadExport(onProgress?: ProgressCallback): Promise<Blob> {
   const res = await fetch(EXPORT_URL, { headers: authHeaders() })
   if (res.status === 401) {
@@ -151,14 +130,13 @@ export async function downloadExport(onProgress?: ProgressCallback): Promise<Blo
   const lenHeader = res.headers.get('Content-Length')
   const total = lenHeader ? Number.parseInt(lenHeader, 10) : null
 
-  // Without a readable stream (or a progress consumer) just take the blob.
   if (!res.body || !onProgress) {
     const blob = await res.blob()
     onProgress?.(blob.size, total ?? blob.size)
     return blob
   }
 
-  // Stream the body so we can report bytes-received as they arrive.
+  // Stream the body to report bytes as they arrive.
   const reader = res.body.getReader()
   const chunks: Uint8Array[] = []
   let loaded = 0
@@ -175,11 +153,9 @@ export async function downloadExport(onProgress?: ProgressCallback): Promise<Blo
   })
 }
 
-/**
- * Execute a GraphQL mutation that uploads a single file, per the
- * graphql-multipart-request-spec. Content-Type is intentionally left unset so
- * the browser adds the multipart boundary; the Authorization header is sent.
- */
+// Single-file upload per the graphql-multipart-request-spec. Uses XHR (not
+// fetch) for upload progress; Content-Type is left unset so the browser sets
+// the multipart boundary.
 export function gqlUpload<T>(
   query: string,
   file: File,
@@ -191,9 +167,6 @@ export function gqlUpload<T>(
   form.append('map', JSON.stringify({ '0': ['variables.file'] }))
   form.append('0', file)
 
-  // XMLHttpRequest (not fetch) because it exposes real upload progress events.
-  // Content-Type is intentionally left unset so the browser adds the multipart
-  // boundary; the Authorization header is sent.
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', GRAPHQL_URL)

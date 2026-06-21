@@ -1,8 +1,5 @@
 @import 'tailwindcss';
 
-/* All-light, minimal admin aesthetic: white surfaces, slate borders/text,
-   indigo accent. Theme tokens are referenced via Tailwind utility classes. */
-
 :root {
   color-scheme: light;
 }

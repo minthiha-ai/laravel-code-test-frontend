@@ -7,7 +7,6 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
   hint?: ReactNode
 }
 
-/** Labeled text input with inline error + hint, for forms. */
 export function Field({ label, error, hint, className, id, ...rest }: FieldProps) {
   const autoId = useId()
   const fieldId = id ?? autoId

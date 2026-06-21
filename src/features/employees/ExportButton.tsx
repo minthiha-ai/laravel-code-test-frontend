@@ -11,9 +11,7 @@ export function ExportButton() {
 
   async function handleExport() {
     setLoading(true)
-    // Start indeterminate: the backend spends most of the time generating the
-    // sheet (no bytes yet). Switch to a real % once data starts streaming.
-    setPct(null)
+    setPct(null) // indeterminate until bytes start streaming
     try {
       const blob = await downloadExport((loaded, total) => {
         setPct(total && total > 0 ? Math.round((loaded / total) * 100) : null)

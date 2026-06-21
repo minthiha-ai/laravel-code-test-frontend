@@ -9,8 +9,7 @@ import { useUpdateEmployee } from '../../hooks/useEmployeeMutations'
 import type { Employee } from '../../types'
 
 interface EditEmployeeModalProps {
-  /** Non-null. Parent should key this component by employee.id so it remounts
-   *  with fresh form state when a different employee is opened. */
+  // Parent keys this by employee.id so it remounts with fresh state per row.
   employee: Employee
   onClose: () => void
 }
