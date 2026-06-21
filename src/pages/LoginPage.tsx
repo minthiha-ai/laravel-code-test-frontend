@@ -99,7 +99,7 @@ export function LoginPage() {
         </form>
 
         <p className="mt-4 text-center text-xs text-slate-400">
-          Default credentials: admin / password
+          Default credentials: admin / admin
         </p>
       </div>
     </div>

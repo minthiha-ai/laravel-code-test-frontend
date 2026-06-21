@@ -21,7 +21,7 @@ binary export).
 - The **backend running** at `http://localhost:8000` (see its README):
   - `php artisan serve`
   - `php artisan queue:work` — **required** for the import feature to be applied
-- Default login: **admin / password**
+- Default login: **admin / admin**
 
 ## Setup
 
